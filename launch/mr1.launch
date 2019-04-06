@@ -1,0 +1,25 @@
+<launch>
+  <arg name="nucleo_port" default="/dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_0676FF555054877567044756-if02" />
+  <arg name="motor_fr_port" default="/dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_066FFF515055657867244552-if02" />
+  <arg name="motor_br_port" default="/dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_0673FF515055657867211816-if02" />
+  <arg name="motor_fl_port" default="/dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_066FFF515055657867203313-if02" />
+  <arg name="motor_bl_port" default="/dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_066EFF515055657867203360-if02" />
+
+  <node name="core" pkg="rosserial_python" type="serial_node.py" output="screen">
+    <param name="port" type="string" value="$(arg nucleo_port)" />
+  </node>
+
+  <node name="joy" pkg="joy" type="joy_node" output="screen" />
+
+  <node name="main" pkg="mr1" type="main" output="screen" />
+
+  <node name="omni" pkg="mr1" type="omni" output="screen">
+    <param name="fr_port" type="string" value="$(arg motor_fr_port)" />
+    <param name="br_port" type="string" value="$(arg motor_br_port)" />
+    <param name="fl_port" type="string" value="$(arg motor_fl_port)" />
+    <param name="bl_port" type="string" value="$(arg motor_bl_port)" />
+    <param name="kp" type="double" value="0.00001" />
+    <param name="ki" type="double" value="0.00001" />
+    <param name="kd" type="double" value="0.0000005" />
+  </node>
+</launch>
