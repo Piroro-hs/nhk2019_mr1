@@ -8,7 +8,7 @@ import {wait} from './lib/utils';
 const SQRT_2 = 2 ** 0.5;
 
 const wheelDiameter = 127;
-const wheelbaseDiameter = 670.33318806;
+const wheelbaseRadius = 670.33318806 / 2;
 const pulse = 500 * 4;
 const velToPulseScale = (1 / (wheelDiameter * Math.PI)) * pulse;
 
@@ -103,10 +103,10 @@ const openSerialPort = path =>
       //   anglePid.reset();
       // }
       // const correctedOmega = anglePid.run(state.targetAngle - state.currentAngle);
-      const fr = ((-vx - vy) / SQRT_2 - wheelbaseDiameter * correctedOmega) * velToPulseScale;
-      const br = ((-vx + vy) / SQRT_2 - wheelbaseDiameter * correctedOmega) * velToPulseScale;
-      const fl = ((vx - vy) / SQRT_2 - wheelbaseDiameter * correctedOmega) * velToPulseScale;
-      const bl = ((vx + vy) / SQRT_2 - wheelbaseDiameter * correctedOmega) * velToPulseScale;
+      const fr = ((-vx - vy) / SQRT_2 - wheelbaseRadius * correctedOmega) * velToPulseScale;
+      const br = ((-vx + vy) / SQRT_2 - wheelbaseRadius * correctedOmega) * velToPulseScale;
+      const fl = ((vx - vy) / SQRT_2 - wheelbaseRadius * correctedOmega) * velToPulseScale;
+      const bl = ((vx + vy) / SQRT_2 - wheelbaseRadius * correctedOmega) * velToPulseScale;
       frPort.write(`V ${fr.toFixed(5)}\n`);
       brPort.write(`V ${br.toFixed(5)}\n`);
       flPort.write(`V ${fl.toFixed(5)}\n`);
