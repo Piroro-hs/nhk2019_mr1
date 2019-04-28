@@ -7,19 +7,28 @@
 
   <node name="core" pkg="rosserial_python" type="serial_node.py" output="screen">
     <param name="port" type="string" value="$(arg nucleo_port)" />
+    <param name="baud" type="int" value="2000000" />
   </node>
 
-  <node name="joy" pkg="joy" type="joy_node" output="screen" />
+  <node name="joy" pkg="joy" type="joy_node" output="screen">
+    <param name="deadzone" value="0.0" />
+  </node>
 
-  <node name="main" pkg="mr1" type="main" output="screen" />
+  <node name="main" pkg="nhk2019_mr1" type="main" output="screen">
+    <param name="acc_lim_v" type="double" value="0.5" />
+    <param name="acc_lim_w" type="double" value="0.785" />
+    <param name="vel_lim_v" type="double" value="2.0" />
+    <param name="vel_lim_w" type="double" value="0.5" />
+    <param name="decel_factor" type="double" value="5.0" />
+  </node>
 
-  <node name="omni" pkg="mr1" type="omni" output="screen">
+  <node name="omni" pkg="nhk2019_mr1" type="omni" output="screen">
     <param name="fr_port" type="string" value="$(arg motor_fr_port)" />
     <param name="br_port" type="string" value="$(arg motor_br_port)" />
     <param name="fl_port" type="string" value="$(arg motor_fl_port)" />
     <param name="bl_port" type="string" value="$(arg motor_bl_port)" />
     <param name="kp" type="double" value="0.00001" />
     <param name="ki" type="double" value="0.00001" />
-    <param name="kd" type="double" value="0.0000005" />
+    <param name="kd" type="double" value="0.000001" />
   </node>
 </launch>
