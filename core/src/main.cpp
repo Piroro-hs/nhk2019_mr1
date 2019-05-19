@@ -4,17 +4,18 @@
 
 #include <ros.h>
 #include <std_msgs/Bool.h>
+#include <std_msgs/Float32.h>
 #include <std_msgs/Int8.h>
 #include <std_msgs/UInt8.h>
-#include <geometry_msgs/Quaternion.h>
 
 #include "motor.h"
+#include "quat.h"
 
 namespace {
-  constexpr size_t IMU_PUB_RATE =50;
-  ros::Time prevImuPubTime;
-  geometry_msgs::Quaternion imu_msg;
-  ros::Publisher imu_pub("imu", &imu_msg);
+  constexpr size_t ANGLE_PUB_RATE = 60;
+  ros::Time prevAnglePubTime;
+  std_msgs::Float32 angle_msg;
+  ros::Publisher angle_pub("angle", &angle_msg);
 
   DigitalOut led(LED1);
   Motor shagai_pick_motor(PA_8, PC_11); // MD1
@@ -31,8 +32,7 @@ namespace {
     bool enabled = true;
   } state = {};
 
-  // ros::NodeHandle nh;
-  ros::NodeHandle_<MbedHardware, 25, 25, 2048, 16384> nh;
+  ros::NodeHandle_<MbedHardware, 25, 25, 2048, 16384> nodeHandle;
 
   void onShagaiPick(const std_msgs::Int8& data) {
     shagai_pick_motor.drive(data.data * -0.5f);
@@ -66,16 +66,14 @@ namespace {
 }
 
 int main() {
-  nh.getHardware()->setBaud(2000000);
-  nh.initNode();
-  nh.subscribe(shagai_pick);
-  nh.subscribe(shagai_arm);
-  nh.subscribe(shagai_grab);
-  nh.subscribe(shagai_throw);
-  nh.subscribe(gerege_actuator);
-  nh.advertise(imu_pub);
-
-  // imu_msg.header.frame_id = "map";
+  nodeHandle.getHardware()->setBaud(2000000);
+  nodeHandle.initNode();
+  nodeHandle.subscribe(shagai_pick);
+  nodeHandle.subscribe(shagai_arm);
+  nodeHandle.subscribe(shagai_grab);
+  nodeHandle.subscribe(shagai_throw);
+  nodeHandle.subscribe(gerege_actuator);
+  nodeHandle.advertise(angle_pub);
 
   imu.reset();
   imu.SetExternalCrystal(true);
@@ -83,29 +81,24 @@ int main() {
   imu.setmode(OPERATION_MODE_IMUPLUS);
   wait(1);
 
-  while (!nh.connected()){
-    nh.spinOnce();
+  while (!nodeHandle.connected()){
+    nodeHandle.spinOnce();
     wait_ms(10);
   }
 
-  prevImuPubTime = nh.now();
+  auto curTime = nodeHandle.now();
+  prevAnglePubTime = curTime;
 
   while (true) {
-    if (auto curTime = nh.now(); (curTime.nsec - prevImuPubTime.nsec) > 1000000000 / IMU_PUB_RATE) {
-      prevImuPubTime += ros::Duration(0, 1000000000 / IMU_PUB_RATE);
+    curTime = nodeHandle.now();
+    if (auto duration = curTime.nsec - prevAnglePubTime.nsec; duration > 1000000000 / ANGLE_PUB_RATE) {
+      prevAnglePubTime += ros::Duration(0, 1000000000 / ANGLE_PUB_RATE);
       imu.get_quat();
-      // imu_msg.orientation.x = imu.quat.x;
-      imu_msg.x = imu.quat.x;
-      // imu_msg.orientation.y = imu.quat.y;
-      imu_msg.y = imu.quat.y;
-      // imu_msg.orientation.z = imu.quat.z;
-      imu_msg.z = imu.quat.z;
-      // imu_msg.orientation.w = imu.quat.w;
-      imu_msg.w = imu.quat.w;
-      // imu_msg.header.stamp = curTime;
-      imu_pub.publish(&imu_msg);
+      const Quat q(imu.quat.x, imu.quat.y, imu.quat.z, imu.quat.w);
+      angle_msg.data = q.getYaw();
+      angle_pub.publish(&angle_msg);
     }
-    nh.spinOnce();
+    nodeHandle.spinOnce();
     wait_ms(10);
   }
 }
