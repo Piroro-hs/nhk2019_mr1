@@ -5,7 +5,19 @@ import {wait} from './lib/utils';
 
 const {Twist} = rosnodejs.require('geometry_msgs').msg;
 const {Joy} = rosnodejs.require('sensor_msgs').msg;
-const {Bool, Int8, UInt8} = rosnodejs.require('std_msgs').msg;
+const {Bool, UInt16} = rosnodejs.require('std_msgs').msg;
+
+const MASK_SP_F = 0x01 << 0;
+const MASK_SP_B = 0x01 << 1;
+const MASK_SA_F = 0x01 << 2;
+const MASK_SA_B = 0x01 << 3;
+const MASK_SG = 0x01 << 4;
+const MASK_ST_F = 0x01 << 5;
+const MASK_ST_B = 0x01 << 6;
+const MASK_GA_F = 0x01 << 7;
+const MASK_GA_B = 0x01 << 8;
+const MASK_GG_F = 0x01 << 9;
+const MASK_GG_B = 0x01 << 10;
 
 const state = {
   power: false,
@@ -15,16 +27,13 @@ const state = {
 };
 
 const checkButtonChanged = num => state.buttons.prev[num] !== state.buttons.cur[num];
+const checkButtonsChanged = nums => nums.some(checkButtonChanged);
 
 (async () => {
   const nodeHandle = await rosnodejs.initNode('/main');
   const robotPower = nodeHandle.advertise('robot_power', Bool);
   const cmdVel = nodeHandle.advertise('cmd_vel', Twist);
-  const shagaiPick = nodeHandle.advertise('shagai_pick', Int8);
-  const shagaiArm = nodeHandle.advertise('shagai_arm', Int8);
-  const shagaiGrab = nodeHandle.advertise('shagai_grab', Bool);
-  const shagaiThrow = nodeHandle.advertise('shagai_throw', Int8);
-  const geregeActuator = nodeHandle.advertise('gerege_actuator', UInt8);
+  const actuator = nodeHandle.advertise('actuator', UInt16);
   await wait(500); // necessary
   const accLimV = await nodeHandle.getParam('/main/acc_lim_v');
   const accLimW = await nodeHandle.getParam('/main/acc_lim_w');
@@ -45,54 +54,28 @@ const checkButtonChanged = num => state.buttons.prev[num] !== state.buttons.cur[
       state.power = !state.power; // eslint-disable-line fp/no-mutation
       robotPower.publish({data: state.power});
     }
-    if (checkButtonChanged(2) || checkButtonChanged(1)) {
-      shagaiPick.publish({data: buttons[2] ? 1 : buttons[1] ? -1 : 0});
-    }
-    if (checkButtonChanged(3) || checkButtonChanged(0)) {
-      shagaiArm.publish({data: buttons[3] ? 1 : buttons[0] ? -1 : 0});
-    }
-    if (checkButtonChanged(5)) {
-      shagaiGrab.publish({data: buttons[5]});
-    }
-    if (checkButtonChanged(6) || checkButtonChanged(7)) {
-      shagaiThrow.publish({data: buttons[7] ? 1 : buttons[6] ? -1 : 0});
-    }
-    if (checkButtonChanged(4)) {
-      switch (state.geregePhase) {
-        case 0:
-          if (buttons[4]) {
-            geregeActuator.publish({data: 0});
-          }
-          break;
-        case 1:
-          if (buttons[4]) {
-            geregeActuator.publish({data: 0b1000});
-          }
-          break;
-        case 2:
-          if (buttons[4]) {
-            geregeActuator.publish({data: 0b1010});
-          }
-          break;
-        case 3:
-          if (buttons[4]) {
-            geregeActuator.publish({data: 0b1001});
-          }
-          break;
-        case 4:
-          if (buttons[4]) {
-            geregeActuator.publish({data: 0b0101});
-          }
-          break;
-        case 5:
-          if (buttons[4]) {
-            geregeActuator.publish({data: 0b0110});
-          }
-          break;
-        default:
-          break;
-      }
-      if (!buttons[4]) {
+    if (checkButtonsChanged([0, 1, 2, 3, 4, 5, 6, 7])) {
+      actuator.publish({
+        data:
+          (buttons[2] ? MASK_SP_F : buttons[1] ? MASK_SP_B : 0) |
+          (buttons[3] ? MASK_SA_F : buttons[0] ? MASK_SA_B : 0) |
+          (buttons[5] ? MASK_SG : 0) |
+          (buttons[6] ? MASK_ST_F : buttons[7] ? MASK_ST_B : 0) |
+          (checkButtonChanged(4) && buttons[4]
+            ? state.geregePhase === 1
+              ? MASK_GA_F
+              : state.geregePhase === 2
+              ? MASK_GA_F | MASK_GG_B
+              : state.geregePhase === 3
+              ? MASK_GA_F | MASK_GG_F
+              : state.geregePhase === 4
+              ? MASK_GA_B | MASK_GG_F
+              : state.geregePhase === 5
+              ? MASK_GA_B | MASK_GG_B
+              : 0
+            : 0),
+      });
+      if (checkButtonChanged(4) && !buttons[4]) {
         state.geregePhase = (state.geregePhase + 1) % 6; // eslint-disable-line fp/no-mutation
       }
     }

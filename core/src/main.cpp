@@ -5,13 +5,24 @@
 #include <ros.h>
 #include <std_msgs/Bool.h>
 #include <std_msgs/Float32.h>
-#include <std_msgs/Int8.h>
-#include <std_msgs/UInt8.h>
+#include <std_msgs/UInt16.h>
 
 #include "motor.h"
 #include "quat.h"
 
 namespace {
+  constexpr uint16_t MASK_SP_F = 0x01 << 0;
+  constexpr uint16_t MASK_SP_B = 0x01 << 1;
+  constexpr uint16_t MASK_SA_F = 0x01 << 2;
+  constexpr uint16_t MASK_SA_B = 0x01 << 3;
+  constexpr uint16_t MASK_SG = 0x01 << 4;
+  constexpr uint16_t MASK_ST_F = 0x01 << 5;
+  constexpr uint16_t MASK_ST_B = 0x01 << 6;
+  constexpr uint16_t MASK_GA_F = 0x01 << 7;
+  constexpr uint16_t MASK_GA_B = 0x01 << 8;
+  constexpr uint16_t MASK_GG_F = 0x01 << 9;
+  constexpr uint16_t MASK_GG_B = 0x01 << 10;
+
   constexpr size_t ANGLE_PUB_RATE = 60;
   ros::Time prevAnglePubTime;
   std_msgs::Float32 angle_msg;
@@ -34,45 +45,29 @@ namespace {
 
   ros::NodeHandle_<MbedHardware, 25, 25, 2048, 16384> nodeHandle;
 
-  void onShagaiPick(const std_msgs::Int8& data) {
-    shagai_pick_motor.drive(data.data * -0.5f);
+  void onActuatorStateChange(const std_msgs::UInt16& data) {
+    const auto sp = data.data & MASK_SP_F ? 1 : data.data & MASK_SP_B ? -1 : 0;
+    const auto sa = data.data & MASK_SA_F ? 1 : data.data & MASK_SA_B ? -1 : 0;
+    const auto sg = data.data & MASK_SG;
+    const auto st = data.data & MASK_ST_F ? 1 : data.data & MASK_ST_B ? -1 : 0;
+    const auto ga = data.data & MASK_GA_F ? 1 : data.data & MASK_GA_B ? -1 : 0;
+    const auto gg = data.data & MASK_GG_F ? 1 : data.data & MASK_GG_B ? -1 : 0;
+    shagai_pick_motor.drive(sp * -0.5f);
+    shagai_arm_motor.drive(sa * -1);
+    shagai_grab_solenoid.write(sg);
+    shagai_throw_solenoid_on.write(st == 1);
+    shagai_throw_solenoid_off.write(st == -1);
+    gerege_arm_motor.drive(ga * 0.5f);
+    gerege_grab_motor.drive(gg);
   }
 
-  void onShagaiArm(const std_msgs::Int8& data) {
-    shagai_arm_motor.drive(data.data * -1);
-  }
-
-  void onShagaiGrab(const std_msgs::Bool& data) {
-    shagai_grab_solenoid.write(data.data);
-  }
-
-  void onShagaiThrow(const std_msgs::Int8& data) {
-    shagai_throw_solenoid_on.write(data.data == 1);
-    shagai_throw_solenoid_off.write(data.data == -1);
-  }
-
-  void onGeregeActuator(const std_msgs::UInt8& data) {
-    const auto arm = data.data & 0b0001 ? 1 : data.data & 0b0010 ? -1 : 0;
-    const auto grab = data.data & 0b0100 ? 1 : data.data & 0b1000 ? -1 : 0;
-    gerege_arm_motor.drive(arm * 0.5f);
-    gerege_grab_motor.drive(grab);
-  }
-
-  ros::Subscriber<std_msgs::Int8> shagai_pick("shagai_pick", onShagaiPick);
-  ros::Subscriber<std_msgs::Int8> shagai_arm("shagai_arm", onShagaiArm);
-  ros::Subscriber<std_msgs::Bool> shagai_grab("shagai_grab", onShagaiGrab);
-  ros::Subscriber<std_msgs::Int8> shagai_throw("shagai_throw", onShagaiThrow);
-  ros::Subscriber<std_msgs::UInt8> gerege_actuator("gerege_actuator", onGeregeActuator);
+  ros::Subscriber<std_msgs::UInt16> actuator("actuator", onActuatorStateChange);
 }
 
 int main() {
   nodeHandle.getHardware()->setBaud(2000000);
   nodeHandle.initNode();
-  nodeHandle.subscribe(shagai_pick);
-  nodeHandle.subscribe(shagai_arm);
-  nodeHandle.subscribe(shagai_grab);
-  nodeHandle.subscribe(shagai_throw);
-  nodeHandle.subscribe(gerege_actuator);
+  nodeHandle.subscribe(actuator);
   nodeHandle.advertise(angle_pub);
 
   imu.reset();
