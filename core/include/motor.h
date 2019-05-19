@@ -8,8 +8,8 @@ class Motor {
     PwmOut pwm;
     DigitalOut phase;
   public:
-    Motor(PinName, PinName);
-    void drive(float);
+    Motor(PinName pwm_pin, PinName phase_pin);
+    void drive(float pow);
     void brake();
 };
 
