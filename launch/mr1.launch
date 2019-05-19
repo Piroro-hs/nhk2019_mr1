@@ -5,10 +5,9 @@
   <arg name="motor_fl_port" default="/dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_066FFF515055657867203313-if02" />
   <arg name="motor_bl_port" default="/dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_066EFF515055657867203360-if02" />
 
-  <node name="core" pkg="rosserial_python" type="serial_node.py" output="screen">
-    <param name="port" type="string" value="$(arg nucleo_port)" />
-    <param name="baud" type="int" value="2000000" />
-  </node>
+  <include file="$(find nhk2019_mr1)/launch/core.launch">
+    <arg name="nucleo_port" value="$(arg nucleo_port)" />
+  </include>
 
   <node name="joy" pkg="joy" type="joy_node" output="screen">
     <param name="deadzone" value="0.0" />

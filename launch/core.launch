@@ -1,0 +1,8 @@
+<launch>
+  <arg name="nucleo_port" default="/dev/serial/by-id/usb-STMicroelectronics_STM32_STLink_0676FF555054877567044756-if02" />
+
+  <node name="core" pkg="rosserial_python" type="serial_node.py" output="screen">
+    <param name="port" type="string" value="$(arg nucleo_port)" />
+    <param name="baud" type="int" value="2000000" />
+  </node>
+</launch>
