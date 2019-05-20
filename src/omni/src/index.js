@@ -1,6 +1,5 @@
 import rosnodejs from 'rosnodejs';
 import SerialPort from 'serialport';
-import qte from 'quaternion-to-euler';
 
 import pid from './lib/pid';
 import {wait} from './lib/utils';
@@ -12,9 +11,8 @@ const wheelbaseRadius = 670.33318806 / 2;
 const pulse = 500 * 4;
 const velToPulseScale = (1 / (wheelDiameter * Math.PI)) * pulse;
 
-const {Twist, Quaternion} = rosnodejs.require('geometry_msgs').msg;
-// const {Imu} = rosnodejs.require('sensor_msgs').msg;
-const {Bool} = rosnodejs.require('std_msgs').msg;
+const {Twist} = rosnodejs.require('geometry_msgs').msg;
+const {Bool, Float32} = rosnodejs.require('std_msgs').msg;
 
 const state = {
   enabled: false,
@@ -82,8 +80,8 @@ const openSerialPort = path =>
     state.vy = linear.y * 1000; // eslint-disable-line fp/no-mutation
     state.omega = angular.z; // eslint-disable-line fp/no-mutation
   });
-  nodeHandle.subscribe('imu', Quaternion, ({x, y, z, w}) => {
-    [state.currentAngle] = qte([x, y, z, w]); // eslint-disable-line fp/no-mutation
+  nodeHandle.subscribe('angle', Float32, ({data}) => {
+    state.currentAngle = data; // eslint-disable-line fp/no-mutation
   });
   await wait(500);
   setInterval(() => {
