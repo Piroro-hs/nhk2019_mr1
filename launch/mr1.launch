@@ -14,20 +14,25 @@
   </node>
 
   <node name="main" pkg="nhk2019_mr1" type="main" output="screen">
-    <param name="acc_lim_v" type="double" value="0.5" />
+    <param name="acc_lim_v" type="double" value="0.25" />
     <param name="acc_lim_w" type="double" value="0.785" />
     <param name="vel_lim_v" type="double" value="2.0" />
-    <param name="vel_lim_w" type="double" value="0.5" />
+    <param name="vel_lim_w" type="double" value="1.0" />
     <param name="decel_factor" type="double" value="5.0" />
   </node>
 
   <node name="omni" pkg="nhk2019_mr1" type="omni" output="screen">
-    <param name="fr_port" type="string" value="$(arg motor_fr_port)" />
-    <param name="br_port" type="string" value="$(arg motor_br_port)" />
-    <param name="fl_port" type="string" value="$(arg motor_fl_port)" />
-    <param name="bl_port" type="string" value="$(arg motor_bl_port)" />
-    <param name="kp" type="double" value="0.00001" />
-    <param name="ki" type="double" value="0.00001" />
-    <param name="kd" type="double" value="0.000001" />
+    <param name="fr_port" value="$(arg motor_fr_port)" />
+    <param name="br_port" value="$(arg motor_br_port)" />
+    <param name="fl_port" value="$(arg motor_fl_port)" />
+    <param name="bl_port" value="$(arg motor_bl_port)" />
+    <param name="motor_kp" value="0.00001" />
+    <param name="motor_ki" value="0.00001" />
+    <param name="motor_kd" value="0.000001" />
+    <param name="angle_correction" value="true" />
+    <param name="angle_kp" value="0.005" />
+    <param name="angle_ki" value="0.005" />
+    <param name="angle_kd" value="0.0005" />
+    <param name="max_rot_vel" value="1.0" />
   </node>
 </launch>

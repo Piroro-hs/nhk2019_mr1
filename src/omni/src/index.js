@@ -4,7 +4,7 @@ import SerialPort from 'serialport';
 import pid from './lib/pid';
 import {wait} from './lib/utils';
 
-const SQRT_2 = 2 ** 0.5;
+const DIV_BY_SQRT_2 = 1 / 2 ** 0.5;
 
 const wheelDiameter = 127;
 const wheelbaseRadius = 670.33318806 / 2;
@@ -15,15 +15,19 @@ const {Twist} = rosnodejs.require('geometry_msgs').msg;
 const {Bool, Float32} = rosnodejs.require('std_msgs').msg;
 
 const state = {
-  enabled: false,
+  enable: false,
   vx: 0,
   vy: 0,
   omega: 0,
-  targetAngle: 0,
-  currentAngle: 0,
-  prevAngle: 0,
+  angleCorrection: {
+    enable: true,
+    target: 0,
+    current: 0,
+    prev: 0,
+  },
 };
 
+// const openSerialPort = path => ({write: console.log, once: console.log});
 const openSerialPort = path =>
   new Promise((resolve, reject) => {
     const port = new SerialPort(path, {
@@ -59,20 +63,28 @@ const openSerialPort = path =>
   blPort.once('data', () => {
     rosnodejs.log.info('BL connected');
   });
-  const kp = await nodeHandle.getParam('/omni/kp');
-  const ki = await nodeHandle.getParam('/omni/ki');
-  const kd = await nodeHandle.getParam('/omni/kd');
+  const kp = await nodeHandle.getParam('/omni/motor_kp');
+  const ki = await nodeHandle.getParam('/omni/motor_ki');
+  const kd = await nodeHandle.getParam('/omni/motor_kd');
   [frPort, brPort, flPort, blPort].forEach(port => {
     port.write(`S kp ${kp.toFixed(9)}\n`);
     port.write(`S ki ${ki.toFixed(9)}\n`);
     port.write(`S kd ${kd.toFixed(9)}\n`);
   });
+  state.angleCorrection.enable = await nodeHandle // eslint-disable-line fp/no-mutation
+    .getParam('/omni/angle_correction')
+    .catch(() => state.angleCorrection.enable);
   // const anglePid = pid(20, 0.001, 150, 0.5);
-  const anglePid = pid(20, 0.2, 200, 0.5);
+  const anglePid = pid(
+    await nodeHandle.getParam('/omni/angle_kp').catch(() => 0),
+    await nodeHandle.getParam('/omni/angle_ki').catch(() => 0),
+    await nodeHandle.getParam('/omni/angle_kd').catch(() => 0),
+    await nodeHandle.getParam('/omni/max_rot_vel').catch(() => 0),
+  );
   nodeHandle.subscribe('robot_power', Bool, ({data}) => {
-    state.enabled = data; // eslint-disable-line fp/no-mutation
-    state.targetAngle = state.currentAngle; // eslint-disable-line fp/no-mutation
-    state.prevAngle = state.currentAngle; // eslint-disable-line fp/no-mutation
+    state.enable = data; // eslint-disable-line fp/no-mutation
+    state.angleCorrection.target = state.angleCorrection.current; // eslint-disable-line fp/no-mutation
+    state.angleCorrection.prev = state.angleCorrection.current; // eslint-disable-line fp/no-mutation
     anglePid.reset();
   });
   nodeHandle.subscribe('cmd_vel', Twist, ({linear, angular}) => {
@@ -81,18 +93,19 @@ const openSerialPort = path =>
     state.omega = angular.z; // eslint-disable-line fp/no-mutation
   });
   nodeHandle.subscribe('angle', Float32, ({data}) => {
-    state.currentAngle = data; // eslint-disable-line fp/no-mutation
+    state.angleCorrection.current = data; // eslint-disable-line fp/no-mutation
   });
   await wait(500);
   setInterval(() => {
-    if (state.enabled) {
+    if (state.enable) {
       const {vx, vy, omega} = state;
-      state.targetAngle += omega * 0.02; // eslint-disable-line fp/no-mutation
+      state.angleCorrection.target += omega * 0.016; // eslint-disable-line fp/no-mutation
       const correctedOmega =
-        state.prevAngle === state.currentAngle &&
-        Math.abs(state.targetAngle - state.currentAngle) < 0.02
+        !state.angleCorrection.enable ||
+        (state.angleCorrection.prev === state.angleCorrection.current &&
+          Math.abs(state.angleCorrection.target - state.angleCorrection.current) < 0.05)
           ? omega
-          : anglePid.run(state.targetAngle - state.currentAngle);
+          : anglePid.run(state.angleCorrection.target - state.angleCorrection.current);
       // if (
       //   state.prevAngle === state.currentAngle &&
       //   Math.abs(state.targetAngle - state.currentAngle) < 0.02
@@ -101,20 +114,20 @@ const openSerialPort = path =>
       //   anglePid.reset();
       // }
       // const correctedOmega = anglePid.run(state.targetAngle - state.currentAngle);
-      const fr = ((-vx - vy) / SQRT_2 - wheelbaseRadius * correctedOmega) * velToPulseScale;
-      const br = ((-vx + vy) / SQRT_2 - wheelbaseRadius * correctedOmega) * velToPulseScale;
-      const fl = ((vx - vy) / SQRT_2 - wheelbaseRadius * correctedOmega) * velToPulseScale;
-      const bl = ((vx + vy) / SQRT_2 - wheelbaseRadius * correctedOmega) * velToPulseScale;
+      const fr = ((-vx - vy) * DIV_BY_SQRT_2 - wheelbaseRadius * correctedOmega) * velToPulseScale;
+      const br = ((-vx + vy) * DIV_BY_SQRT_2 - wheelbaseRadius * correctedOmega) * velToPulseScale;
+      const fl = ((vx - vy) * DIV_BY_SQRT_2 - wheelbaseRadius * correctedOmega) * velToPulseScale;
+      const bl = ((vx + vy) * DIV_BY_SQRT_2 - wheelbaseRadius * correctedOmega) * velToPulseScale;
       frPort.write(`V ${fr.toFixed(5)}\n`);
       brPort.write(`V ${br.toFixed(5)}\n`);
       flPort.write(`V ${fl.toFixed(5)}\n`);
       blPort.write(`V ${bl.toFixed(5)}\n`);
-      state.prevAngle = state.currentAngle; // eslint-disable-line fp/no-mutation
-      console.log({state, correctedOmega});
+      console.log({fr, br, fl, bl, state, correctedOmega});
+      state.angleCorrection.prev = state.angleCorrection.current; // eslint-disable-line fp/no-mutation
     } else {
       [frPort, brPort, flPort, blPort].forEach(port => {
         port.write('R 0\n');
       });
     }
-  }, 20);
+  }, 16);
 })();

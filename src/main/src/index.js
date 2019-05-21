@@ -7,6 +7,8 @@ const {Twist} = rosnodejs.require('geometry_msgs').msg;
 const {Joy} = rosnodejs.require('sensor_msgs').msg;
 const {Bool, UInt16} = rosnodejs.require('std_msgs').msg;
 
+const DIV_BY_SQRT_2 = 1 / 2 ** 0.5;
+
 const MASK_SP_F = 0x01 << 0;
 const MASK_SP_B = 0x01 << 1;
 const MASK_SA_F = 0x01 << 2;
@@ -40,8 +42,8 @@ const checkButtonsChanged = nums => nums.some(checkButtonChanged);
   const velLimV = await nodeHandle.getParam('/main/vel_lim_v');
   const velLimW = await nodeHandle.getParam('/main/vel_lim_w');
   const decelFactor = await nodeHandle.getParam('/main/decel_factor');
-  const linearXSmoother = smoother(accLimV, decelFactor);
-  const linearYSmoother = smoother(accLimV, decelFactor);
+  const linearSmootherR = smoother(accLimV, decelFactor);
+  const linearSmootherL = smoother(accLimV, decelFactor);
   const angularSmoother = smoother(accLimW);
   nodeHandle.subscribe('joy', Joy, ({axes, buttons}) => {
     state.axes = axes; // eslint-disable-line fp/no-mutation
@@ -82,17 +84,12 @@ const checkButtonsChanged = nums => nums.some(checkButtonChanged);
     state.buttons.prev = state.buttons.cur; // eslint-disable-line fp/no-mutation
     if (state.power) {
       const [lx, ly, rx, , px, py] = state.axes;
-      // const lx2 = lx ** 2;
-      // const ly2 = ly ** 2;
-      // const r2 = lx2 + ly2;
-      const x = py
-        ? linearXSmoother(velLimV / 2) * py
-        : linearXSmoother(velLimV * Math.abs(ly)) * (ly > 0 ? 1 : -1);
-      // : linearXSmoother(r2 ? velLimV * (ly2 / r2) : 0) * (ly > 0 ? 1 : -1);
-      const y = px
-        ? linearYSmoother(velLimV / 2) * px
-        : linearYSmoother(velLimV * Math.abs(lx)) * (lx > 0 ? 1 : -1);
-      // : linearYSmoother(r2 ? velLimV * (lx2 / r2) : 0) * (lx > 0 ? 1 : -1);
+      const rawX = py ? velLimV * py : (velLimV / 2) * ly;
+      const rawY = px ? velLimV * px : (velLimV / 2) * lx;
+      const vr = linearSmootherR((rawX + rawY) * DIV_BY_SQRT_2);
+      const vl = linearSmootherL((-rawX + rawY) * DIV_BY_SQRT_2);
+      const x = (vr - vl) * DIV_BY_SQRT_2;
+      const y = (vr + vl) * DIV_BY_SQRT_2;
       const w = angularSmoother(velLimW * rx);
       cmdVel.publish(
         new Twist({
