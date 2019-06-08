@@ -16,10 +16,13 @@ const MASK_SA_B = 0x01 << 3;
 const MASK_SG = 0x01 << 4;
 const MASK_ST_F = 0x01 << 5;
 const MASK_ST_B = 0x01 << 6;
-const MASK_GA_F = 0x01 << 7;
+const MASK_GA_F = 0x01 << 7; // blue
 const MASK_GA_B = 0x01 << 8;
+// const MASK_GA_F = 0x01 << 8; // red
+// const MASK_GA_B = 0x01 << 7;
 const MASK_GG_F = 0x01 << 9;
 const MASK_GG_B = 0x01 << 10;
+const MASK_GD = 0x01 << 11;
 
 const state = {
   power: false,
@@ -42,9 +45,9 @@ const checkButtonsChanged = nums => nums.some(checkButtonChanged);
   const velLimV = await nodeHandle.getParam('/main/vel_lim_v');
   const velLimW = await nodeHandle.getParam('/main/vel_lim_w');
   const decelFactor = await nodeHandle.getParam('/main/decel_factor');
-  const linearSmootherR = smoother(accLimV, decelFactor);
-  const linearSmootherL = smoother(accLimV, decelFactor);
-  const angularSmoother = smoother(accLimW);
+  const linearSmootherR = smoother(accLimV * 0.016, decelFactor);
+  const linearSmootherL = smoother(accLimV * 0.016, decelFactor);
+  const angularSmoother = smoother(accLimW * 0.016);
   nodeHandle.subscribe('joy', Joy, ({axes, buttons}) => {
     state.axes = axes; // eslint-disable-line fp/no-mutation
     state.buttons.cur = buttons; // eslint-disable-line fp/no-mutation
@@ -56,36 +59,36 @@ const checkButtonsChanged = nums => nums.some(checkButtonChanged);
       state.power = !state.power; // eslint-disable-line fp/no-mutation
       robotPower.publish({data: state.power});
     }
+    if (checkButtonChanged(4) && !buttons[4]) {
+      state.geregePhase = (state.geregePhase + 1) % 7; // eslint-disable-line fp/no-mutation
+    }
     if (checkButtonsChanged([0, 1, 2, 3, 4, 5, 6, 7])) {
       actuator.publish({
         data:
-          (buttons[2] ? MASK_SP_F : buttons[1] ? MASK_SP_B : 0) |
-          (buttons[3] ? MASK_SA_F : buttons[0] ? MASK_SA_B : 0) |
+          (buttons[2] ? MASK_SA_F : buttons[1] ? MASK_SA_B : 0) |
+          (buttons[0] ? MASK_SP_F : buttons[3] ? MASK_SP_B : 0) |
           (buttons[5] ? MASK_SG : 0) |
           (buttons[6] ? MASK_ST_F : buttons[7] ? MASK_ST_B : 0) |
-          (checkButtonChanged(4) && buttons[4]
-            ? state.geregePhase === 1
-              ? MASK_GA_F
-              : state.geregePhase === 2
-              ? MASK_GA_F | MASK_GG_B
-              : state.geregePhase === 3
-              ? MASK_GA_F | MASK_GG_F
-              : state.geregePhase === 4
-              ? MASK_GA_B | MASK_GG_F
-              : state.geregePhase === 5
-              ? MASK_GA_B | MASK_GG_B
-              : 0
+          (state.geregePhase === 1
+            ? MASK_GA_F | MASK_GG_B
+            : state.geregePhase === 2
+            ? MASK_GA_F | MASK_GG_F
+            : state.geregePhase === 3
+            ? MASK_GA_B | MASK_GG_F
+            : state.geregePhase === 4
+            ? MASK_GA_B | MASK_GG_F | MASK_GD
+            : state.geregePhase === 5
+            ? MASK_GA_B | MASK_GG_B
+            : state.geregePhase === 6
+            ? MASK_GA_F | MASK_GG_B
             : 0),
       });
-      if (checkButtonChanged(4) && !buttons[4]) {
-        state.geregePhase = (state.geregePhase + 1) % 6; // eslint-disable-line fp/no-mutation
-      }
     }
-    state.buttons.prev = state.buttons.cur; // eslint-disable-line fp/no-mutation
     if (state.power) {
       const [lx, ly, rx, , px, py] = state.axes;
-      const rawX = py ? velLimV * py : (velLimV / 2) * ly;
-      const rawY = px ? velLimV * px : (velLimV / 2) * lx;
+      const ratio = buttons[8] ? 1 : 1.5;
+      const rawX = (py ? velLimV * py : (velLimV / 2) * ly) * ratio;
+      const rawY = (px ? velLimV * px : (velLimV / 2) * lx) * ratio;
       const vr = linearSmootherR((rawX + rawY) * DIV_BY_SQRT_2);
       const vl = linearSmootherL((-rawX + rawY) * DIV_BY_SQRT_2);
       const x = (vr - vl) * DIV_BY_SQRT_2;
@@ -98,5 +101,6 @@ const checkButtonsChanged = nums => nums.some(checkButtonChanged);
         }),
       );
     }
+    state.buttons.prev = state.buttons.cur; // eslint-disable-line fp/no-mutation
   }, 16);
 })();

@@ -1,6 +1,7 @@
 #include <mbed.h>
 
 #include <BNO055.h>
+#include <Servo.h>
 
 #include <ros.h>
 #include <std_msgs/Bool.h>
@@ -22,6 +23,7 @@ namespace {
   constexpr uint16_t MASK_GA_B = 0x01 << 8;
   constexpr uint16_t MASK_GG_F = 0x01 << 9;
   constexpr uint16_t MASK_GG_B = 0x01 << 10;
+  constexpr uint16_t MASK_GD = 0x01 << 11;
 
   constexpr size_t ANGLE_PUB_RATE = 60;
   ros::Time prevAnglePubTime;
@@ -37,6 +39,7 @@ namespace {
   DigitalOut shagai_throw_solenoid_on(PA_1);
   DigitalOut shagai_throw_solenoid_off(PB_14);
   BNO055 imu(PB_7, PB_8); // RST PC8
+  Servo gerege_down_servo(PC_10);
 
 // TIM3 下側flbr
   struct {
@@ -51,14 +54,16 @@ namespace {
     const auto sg = data.data & MASK_SG;
     const auto st = data.data & MASK_ST_F ? 1 : data.data & MASK_ST_B ? -1 : 0;
     const auto ga = data.data & MASK_GA_F ? 1 : data.data & MASK_GA_B ? -1 : 0;
-    const auto gg = data.data & MASK_GG_F ? 1 : data.data & MASK_GG_B ? -1 : 0;
+    const auto gg = data.data & MASK_GG_F ? -1 : data.data & MASK_GG_B ? 1 : 0;
+    const auto gd =data.data & MASK_GD;
     shagai_pick_motor.drive(sp * -0.5f);
     shagai_arm_motor.drive(sa * -1);
     shagai_grab_solenoid.write(sg);
     shagai_throw_solenoid_on.write(st == 1);
     shagai_throw_solenoid_off.write(st == -1);
-    gerege_arm_motor.drive(ga * 0.5f);
+    gerege_arm_motor.drive(ga * 0.75f);
     gerege_grab_motor.drive(gg);
+    gerege_down_servo.SetPosition(gd ? 600 : 1300);
   }
 
   ros::Subscriber<std_msgs::UInt16> actuator("actuator", onActuatorStateChange);
@@ -69,6 +74,8 @@ int main() {
   nodeHandle.initNode();
   nodeHandle.subscribe(actuator);
   nodeHandle.advertise(angle_pub);
+
+  gerege_down_servo.Enable(1300, 20000);
 
   imu.reset();
   imu.SetExternalCrystal(true);
